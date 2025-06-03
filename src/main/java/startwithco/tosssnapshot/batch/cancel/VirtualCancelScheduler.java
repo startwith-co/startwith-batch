@@ -12,7 +12,7 @@ import startwithco.tosssnapshot.common.service.CommonService;
 public class VirtualCancelScheduler {
     private final CommonService commonService;
 
-    @Scheduled(fixedDelay = 1 * 60 * 1000)
+    @Scheduled(fixedDelay = 10 * 60 * 1000)
     public void runAutoCancel() {
         try {
             log.info("가상계좌 자동 취소 스케줄러");
