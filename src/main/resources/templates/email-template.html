@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>정산 오류 알림</title>
+</head>
+<body style="background-color: #f4f4f4; font-family: 'Arial', sans-serif; padding: 20px; margin: 0;">
+<div style="background-color: #ffffff; max-width: 600px; margin: 40px auto; border-radius: 10px; box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.1); border: 1px solid #ddd; overflow: hidden;">
+    <div style="background-color: #f8f8f8; padding: 15px; text-align: left;">
+        <img src="cid:logoImage" alt="OMW Logo" style="width: 130px; display: inline-block;">
+    </div>
+    <div style="padding: 25px; text-align: left;">
+        <p style="font-size: 20px; font-weight: bold; color: #d9534f; line-height: 1.8; margin: 0 0 10px;">
+            정산 처리 중 오류가 발생했습니다
+        </p>
+        <div style="border-top: 3px solid #d9534f; margin: 20px 0;"></div>
+
+        <p style="font-size: 16px; color: #333; line-height: 1.8;">
+            정산 처리 중 아래와 같은 오류가 발생하여 작업이 중단되었습니다.
+        </p>
+
+        <p style="background-color: #f9f9f9; border-left: 5px solid #d9534f; padding: 15px; font-size: 14px; color: #555; white-space: pre-wrap;">
+            <b>날짜:</b> <span th:text="${date}">2025-06-03T03:00:00</span><br>
+            <b>오류 메시지:</b> <span th:text="${errorMessage}">정산 API 응답 오류</span>
+        </p>
+
+        <p style="font-size: 14px; color: #777;">
+            * 해당 오류는 자동화된 시스템에 의해 감지되었습니다.<br>
+            * 문제 해결을 위해 관리자에게 전달되었습니다.
+        </p>
+    </div>
+</div>
+</body>
+</html>
