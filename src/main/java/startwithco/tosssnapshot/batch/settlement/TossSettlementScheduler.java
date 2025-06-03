@@ -1,4 +1,4 @@
-package startwithco.tosssnapshot.batch;
+package startwithco.tosssnapshot.batch.settlement;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

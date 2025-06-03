@@ -1,4 +1,4 @@
-package startwithco.tosssnapshot.batch;
+package startwithco.tosssnapshot.batch.settlement;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -8,6 +8,7 @@ import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
@@ -24,7 +25,6 @@ import java.util.Base64;
 import java.util.List;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class TossSettlementTasklet implements Tasklet {
 
@@ -33,6 +33,11 @@ public class TossSettlementTasklet implements Tasklet {
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
+
+    public TossSettlementTasklet(@Qualifier("tossSettlementWebClient") WebClient webClient, ObjectMapper objectMapper) {
+        this.webClient = webClient;
+        this.objectMapper = objectMapper;
+    }
 
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
