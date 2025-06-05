@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 import startwithco.tosssnapshot.base.BaseTimeEntity;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "TOSS_PAYMENT_DAILY_SNAPSHOT_ENTITY")
 @AllArgsConstructor
@@ -37,18 +39,18 @@ public class TossPaymentDailySnapshotEntity extends BaseTimeEntity {
     @Column(name = "amount", nullable = false)
     private Long amount;
 
-    @Column(name = "interest_fee", nullable = false)
-    private Long interestFee;
-
     @Column(name = "fee", nullable = false)
     private Long fee;
 
-    @Column(name = "supply_amount", nullable = false)
-    private Long supplyAmount;
-
-    @Column(name = "vat", nullable = false)
-    private Long vat;
-
     @Column(name = "pay_out_amount", nullable = false)
     private Long payOutAmount;
+
+    @Column(name = "settlement_amount", nullable = false)
+    private Long settlementAmount;
+
+    @Column(name = "settlement_at", nullable = true)
+    private LocalDateTime settlementAt;
+
+    @Column(name = "is_settled", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private Boolean isSettled;
 }

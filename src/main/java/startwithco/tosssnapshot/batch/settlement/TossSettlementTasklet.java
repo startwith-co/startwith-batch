@@ -83,8 +83,8 @@ public class TossSettlementTasklet implements Tasklet {
         String sql = """
                 INSERT INTO TOSS_PAYMENT_DAILY_SNAPSHOT_ENTITY (
                     order_id, payment_key, transaction_id, method, approved_at,
-                    amount, intertest_fee, fee, supply_amount, vat, pay_out_amount
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    amount, fee, pay_out_amount, settlement_amount, is_settled
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
 
         for (JsonNode settlement : allSettlements) {
@@ -94,16 +94,24 @@ public class TossSettlementTasklet implements Tasklet {
             String method = settlement.path("method").asText(null);
             String approvedAt = settlement.path("approvedAt").asText(null);
             Long amount = settlement.path("amount").asLong(0);
-            Long interestFee = settlement.path("interestFee").asLong(0);
             Long fee = settlement.path("fee").asLong(0);
-            Long supplyAmount = settlement.path("supplyAmount").asLong(0);
-            Long vat = settlement.path("vat").asLong(0);
             Long payOutAmount = settlement.path("payOutAmount").asLong(0);
 
+            if (amount >= 24_000_000) {
+                long startwithTax = (long) (amount * 0.044);
 
-            jdbcTemplate.update(sql,
-                    orderId, paymentKey, transactionKey, method, approvedAt,
-                    amount, interestFee, fee, supplyAmount, vat, payOutAmount);
+                jdbcTemplate.update(sql,
+                        orderId, paymentKey, transactionKey, method, approvedAt,
+                        amount, fee, payOutAmount, payOutAmount - startwithTax, false
+                );
+            } else {
+                long startwithTax = (long) (amount * 0.055);
+
+                jdbcTemplate.update(sql,
+                        orderId, paymentKey, transactionKey, method, approvedAt,
+                        amount, fee, payOutAmount, payOutAmount - startwithTax, false
+                );
+            }
         }
 
         return RepeatStatus.FINISHED;
