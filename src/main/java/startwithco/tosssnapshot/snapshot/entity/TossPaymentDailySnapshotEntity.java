@@ -19,36 +19,36 @@ public class TossPaymentDailySnapshotEntity extends BaseTimeEntity {
     @Column(name = "toss_payment_daily_snapshot_seq")
     private Long tossPaymentDailySnapshotSeq;
 
-    @Column(name = "order_id", nullable = false)
+    @Column(name = "order_id", nullable = false, unique = true)
     private String orderId;
 
     @Column(name = "payment_key", nullable = false)
     private String paymentKey;
 
-    @Column(name = "transaction_id")
+    @Column(name = "transaction_id", nullable = false)
     private String transactionId;
 
-    @Column(name = "method")
+    @Column(name = "method", nullable = false)
     private String method;
 
-    @Column(name = "approved_at")
+    @Column(name = "approved_at", nullable = false)
     private String approvedAt;
 
-    @Column(name = "amount")
+    @Column(name = "amount", nullable = false)
     private Long amount;
 
-    @Column(name = "interest_fee")
+    @Column(name = "interest_fee", nullable = false)
     private Long interestFee;
 
-    @Column(name = "fee")
+    @Column(name = "fee", nullable = false)
     private Long fee;
 
-    @Column(name = "supply_amount")
+    @Column(name = "supply_amount", nullable = false)
     private Long supplyAmount;
 
-    @Column(name = "vat")
+    @Column(name = "vat", nullable = false)
     private Long vat;
 
-    @Column(name = "pay_out_amount")
+    @Column(name = "pay_out_amount", nullable = false)
     private Long payOutAmount;
 }

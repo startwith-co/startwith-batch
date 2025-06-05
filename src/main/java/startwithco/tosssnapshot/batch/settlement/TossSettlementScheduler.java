@@ -22,7 +22,7 @@ public class TossSettlementScheduler {
     private final Job tossSettlementJob;
     private final CommonService commonService;
 
-    @Scheduled(cron = "0 0 3 * * *")
+    @Scheduled(cron = "0 40 14 * * *")
     public void runTossSettlementJob() {
         String targetDate = LocalDate.now().minusDays(1).toString();
 
