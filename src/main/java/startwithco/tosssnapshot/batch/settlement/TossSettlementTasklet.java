@@ -43,7 +43,7 @@ public class TossSettlementTasklet implements Tasklet {
     @Override
     @Transactional
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
-        String targetDate = LocalDate.now().minusDays(1).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        String targetDate = LocalDate.now().minusDays(7).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
 
         String encodedSecretKey = Base64.getEncoder()
                 .encodeToString((tossSecretKey + ":").getBytes(StandardCharsets.UTF_8));
@@ -88,6 +88,11 @@ public class TossSettlementTasklet implements Tasklet {
                 """;
 
         for (JsonNode settlement : allSettlements) {
+            JsonNode cancelNode = settlement.path("cancel");
+            if(cancelNode.isMissingNode() || cancelNode.isNull()) {
+                continue;
+            }
+
             String orderId = settlement.path("orderId").asText(null);
             String paymentKey = settlement.path("paymentKey").asText(null);
             String transactionKey = settlement.path("transactionKey").asText(null);
