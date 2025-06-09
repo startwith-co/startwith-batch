@@ -23,11 +23,9 @@ import reactor.core.publisher.Mono;
 import startwithco.tosssnapshot.exception.ServerException;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static startwithco.tosssnapshot.exception.code.ExceptionCodeMapper.*;
 import static startwithco.tosssnapshot.exception.code.ExceptionCodeMapper.getCode;
@@ -38,20 +36,23 @@ public class CommonService {
     @Value("${toss.payment.secret-key}")
     private String tossPaymentSecretKey;
 
-    private final WebClient webClient;
+    private final WebClient tossPaymentWebClient;
+    private final WebClient tossSettlementWebClient;
     private final TemplateEngine templateEngine;
     private final JavaMailSender javaMailSender;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
 
     public CommonService(
-            @Qualifier("tossPaymentWebClient") WebClient webClient,
+            @Qualifier("tossPaymentWebClient") WebClient tossPaymentWebClient,
+            @Qualifier("tossSettlementWebClient") WebClient tossSettlementWebClient,
             TemplateEngine templateEngine,
             JavaMailSender javaMailSender,
             ObjectMapper objectMapper,
             JdbcTemplate jdbcTemplate
     ) {
-        this.webClient = webClient;
+        this.tossPaymentWebClient = tossPaymentWebClient;
+        this.tossSettlementWebClient = tossSettlementWebClient;
         this.templateEngine = templateEngine;
         this.javaMailSender = javaMailSender;
         this.objectMapper = objectMapper;
@@ -89,7 +90,7 @@ public class CommonService {
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("cancelReason", "가상 계좌 입금 날짜 초과");
 
-        return webClient.post()
+        return tossPaymentWebClient.post()
                 .uri("/{paymentKey}/cancel", paymentKey)
                 .header(HttpHeaders.AUTHORIZATION, "Basic " + encodedSecretKey)
                 .header("Idempotency-Key", paymentKey)
@@ -128,7 +129,7 @@ public class CommonService {
     public void cancelExpiredVirtualAccounts() {
         LocalDateTime now = LocalDateTime.now();
 
-        String selectSql = """
+        String sql = """
                     SELECT order_id, payment_key
                     FROM payment_entity
                     WHERE method = 'VIRTUAL_ACCOUNT'
@@ -136,18 +137,96 @@ public class CommonService {
                       AND due_date < ?
                 """;
 
-        List<Map<String, Object>> targets = jdbcTemplate.queryForList(selectSql, now);
+        List<Map<String, Object>> targets = jdbcTemplate.queryForList(sql, now);
 
         for (Map<String, Object> row : targets) {
             String orderId = (String) row.get("order_id");
             String paymentKey = (String) row.get("payment_key");
 
             try {
-                // 토스 결제 취소 API 호출
                 cancelTossPaymentApproval(paymentKey).subscribe();
             } catch (Exception e) {
                 log.error("❌ 자동 취소 실패 - orderId: {}, message: {}", orderId, e.getMessage());
             }
+        }
+    }
+
+    @Transactional
+    public void executeDailyTossPaymentSettlement(String targetDate) throws Exception {
+        String encodedSecretKey = Base64.getEncoder()
+                .encodeToString((tossPaymentSecretKey + ":").getBytes(StandardCharsets.UTF_8));
+
+        int page = 1;
+        int size = 5000;
+        List<JsonNode> allSettlements = new ArrayList<>();
+
+        while (true) {
+            String url = String.format(
+                    "/v1/settlements?startDate=%s&endDate=%s&dateType=paidOutDate&page=%d&size=%d",
+                    targetDate, targetDate, page, size
+            );
+
+            String response = tossSettlementWebClient.get()
+                    .uri(url)
+                    .header(HttpHeaders.AUTHORIZATION, "Basic " + encodedSecretKey)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block(Duration.ofSeconds(60));
+
+            JsonNode root = objectMapper.readTree(response);
+            JsonNode settlements = root.path("settlements");
+
+            if (settlements.isArray()) {
+                for (JsonNode node : settlements) {
+                    allSettlements.add(node);
+                }
+            }
+
+            boolean hasNext = root.path("hasNext").asBoolean(false);
+            if (!hasNext) break;
+
+            page++;
+        }
+
+        String sql = """
+                INSERT INTO TOSS_PAYMENT_DAILY_SNAPSHOT_ENTITY (
+                    order_id, payment_key, transaction_id, method, approved_at,
+                    amount, fee, pay_out_amount, settlement_amount, is_settled
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """;
+
+        List<Object[]> batchParams = new ArrayList<>();
+
+        for (JsonNode settlement : allSettlements) {
+            JsonNode cancelNode = settlement.path("cancel");
+            if (cancelNode.isMissingNode() || cancelNode.isNull()) {
+                continue;
+            }
+
+            String orderId = settlement.path("orderId").asText(null);
+            String paymentKey = settlement.path("paymentKey").asText(null);
+            String transactionKey = settlement.path("transactionKey").asText(null);
+            String method = settlement.path("method").asText(null);
+            String approvedAt = settlement.path("approvedAt").asText(null);
+            Long amount = settlement.path("amount").asLong(0);
+            Long fee = settlement.path("fee").asLong(0);
+            Long payOutAmount = settlement.path("payOutAmount").asLong(0);
+
+            long startwithTax = (amount >= 24_000_000)
+                    ? (long) (amount * 0.044)
+                    : (long) (amount * 0.055);
+
+            batchParams.add(new Object[]{
+                    orderId, paymentKey, transactionKey, method, approvedAt,
+                    amount, fee, payOutAmount, payOutAmount - startwithTax, false
+            });
+        }
+
+        if (!batchParams.isEmpty()) {
+            log.info("✅ Toss 정산 스냅샷 {}건 저장 완료", batchParams.size());
+            jdbcTemplate.batchUpdate(sql, batchParams);
+        } else {
+            log.info("ℹ️ 저장할 Toss 정산 스냅샷이 없습니다.");
         }
     }
 }

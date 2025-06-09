@@ -24,7 +24,7 @@ public class TossPaymentDailySnapshotEntity extends BaseTimeEntity {
     @Column(name = "order_id", nullable = false, unique = true)
     private String orderId;
 
-    @Column(name = "payment_key", nullable = false)
+    @Column(name = "payment_key", nullable = false, unique = true)
     private String paymentKey;
 
     @Column(name = "transaction_id", nullable = false)

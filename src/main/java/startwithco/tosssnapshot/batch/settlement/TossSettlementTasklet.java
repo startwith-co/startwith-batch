@@ -1,123 +1,27 @@
 package startwithco.tosssnapshot.batch.settlement;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpHeaders;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.reactive.function.client.WebClient;
+import startwithco.tosssnapshot.common.service.CommonService;
 
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
 
 @Component
-@Slf4j
+@RequiredArgsConstructor
 public class TossSettlementTasklet implements Tasklet {
-
-    @Value("${toss.payment.secret-key}")
-    private String tossSecretKey;
-
-    private final WebClient webClient;
-    private final ObjectMapper objectMapper;
-    private final JdbcTemplate jdbcTemplate;
-
-    public TossSettlementTasklet(@Qualifier("tossSettlementWebClient") WebClient webClient, ObjectMapper objectMapper, JdbcTemplate jdbcTemplate) {
-        this.webClient = webClient;
-        this.objectMapper = objectMapper;
-        this.jdbcTemplate = jdbcTemplate;
-    }
+    private final CommonService commonService;
 
     @Override
     @Transactional
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
         String targetDate = LocalDate.now().minusDays(7).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-
-        String encodedSecretKey = Base64.getEncoder()
-                .encodeToString((tossSecretKey + ":").getBytes(StandardCharsets.UTF_8));
-
-        int page = 1;
-        int size = 5000;
-        List<JsonNode> allSettlements = new ArrayList<>();
-
-        while (true) {
-            String url = String.format(
-                    "/v1/settlements?startDate=%s&endDate=%s&dateType=paidOutDate&page=%d&size=%d",
-                    targetDate, targetDate, page, size
-            );
-
-            String response = webClient.get()
-                    .uri(url)
-                    .header(HttpHeaders.AUTHORIZATION, "Basic " + encodedSecretKey)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .block(Duration.ofSeconds(60));
-
-            JsonNode root = objectMapper.readTree(response);
-            JsonNode settlements = root.path("settlements");
-
-            if (settlements.isArray()) {
-                for (JsonNode node : settlements) {
-                    allSettlements.add(node);
-                }
-            }
-
-            boolean hasNext = root.path("hasNext").asBoolean(false);
-            if (!hasNext) break;
-
-            page++;
-        }
-
-        String sql = """
-                INSERT INTO TOSS_PAYMENT_DAILY_SNAPSHOT_ENTITY (
-                    order_id, payment_key, transaction_id, method, approved_at,
-                    amount, fee, pay_out_amount, settlement_amount, is_settled
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """;
-
-        for (JsonNode settlement : allSettlements) {
-            JsonNode cancelNode = settlement.path("cancel");
-            if(cancelNode.isMissingNode() || cancelNode.isNull()) {
-                continue;
-            }
-
-            String orderId = settlement.path("orderId").asText(null);
-            String paymentKey = settlement.path("paymentKey").asText(null);
-            String transactionKey = settlement.path("transactionKey").asText(null);
-            String method = settlement.path("method").asText(null);
-            String approvedAt = settlement.path("approvedAt").asText(null);
-            Long amount = settlement.path("amount").asLong(0);
-            Long fee = settlement.path("fee").asLong(0);
-            Long payOutAmount = settlement.path("payOutAmount").asLong(0);
-
-            if (amount >= 24_000_000) {
-                long startwithTax = (long) (amount * 0.044);
-
-                jdbcTemplate.update(sql,
-                        orderId, paymentKey, transactionKey, method, approvedAt,
-                        amount, fee, payOutAmount, payOutAmount - startwithTax, false
-                );
-            } else {
-                long startwithTax = (long) (amount * 0.055);
-
-                jdbcTemplate.update(sql,
-                        orderId, paymentKey, transactionKey, method, approvedAt,
-                        amount, fee, payOutAmount, payOutAmount - startwithTax, false
-                );
-            }
-        }
+        commonService.executeDailyTossPaymentSettlement(targetDate);
 
         return RepeatStatus.FINISHED;
     }
